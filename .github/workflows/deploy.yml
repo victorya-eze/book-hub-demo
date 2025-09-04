@@ -44,18 +44,18 @@ jobs:
             npm run build || true
           fi
 
-    - name: Create EB source bundle (includes Dockerfile)
-      run: |
-        cd $APP_DIR
-        zip -r ../app.zip . -x ".git/*" ".github/*"
-        cd ..
+      - name: Create EB source bundle (includes Dockerfile)
+        run: |
+          cd $APP_DIR
+          zip -r ../app.zip . -x ".git/*" ".github/*"
+          cd ..
 
-    - name: Upload artifact (app.zip)
-      uses: actions/upload-artifact@v4
-      with:
-        name: app_bundle
-        path: app.zip
-        if-no-files-found: error
+      - name: Upload artifact (app.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app_bundle
+          path: app.zip
+          if-no-files-found: error
 
 
   infra:
