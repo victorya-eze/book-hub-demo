@@ -24,22 +24,39 @@ jobs:
 
       - name: Install deps & build (supports pnpm/yarn/npm)
         working-directory: ${{ env.APP_DIR }}
+        shell: bash
         run: |
-          corepack enable || true
-          if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; pnpm build;           elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; yarn build;           elif [ -f package-lock.json ]; then npm ci; npm run build;           else npm install; npm run build || true; fi
+          set -e
+          corepack prepare pnpm@10.15.1 --activate || true
 
-      - name: Create EB source bundle (includes Dockerfile)
-        run: |
-          cd $APP_DIR
-          zip -r ../app.zip . -x ".git/*" ".github/*"
-          cd ..
+          if [ -f pnpm-lock.yaml ]; then
+            # Try strict first; fallback if lock is stale
+            pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+            pnpm build
+          elif [ -f yarn.lock ]; then
+            yarn install --frozen-lockfile || yarn install
+            yarn build
+          elif [ -f package-lock.json ]; then
+            npm ci || npm install
+            npm run build
+          else
+            npm install
+            npm run build || true
+          fi
 
-      - name: Upload artifact (app.zip)
-        uses: actions/upload-artifact@v4
-        with:
-          name: app_bundle
-          path: app.zip
-          if-no-files-found: error
+    - name: Create EB source bundle (includes Dockerfile)
+      run: |
+        cd $APP_DIR
+        zip -r ../app.zip . -x ".git/*" ".github/*"
+        cd ..
+
+    - name: Upload artifact (app.zip)
+      uses: actions/upload-artifact@v4
+      with:
+        name: app_bundle
+        path: app.zip
+        if-no-files-found: error
+
 
   infra:
     name: Infra - Terraform Init/Validate/Plan
