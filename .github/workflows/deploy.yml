@@ -1,0 +1,110 @@
+name: CI / Infra / CD - Elastic Beanstalk (Docker)
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  APP_DIR: book-review
+  INFRA_DIR: infra
+  VERSION_LABEL: v-${{ github.run_number }}
+
+jobs:
+  ci:
+    name: CI - Build & Package App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node (Next.js build compatible)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps & build (supports pnpm/yarn/npm)
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          corepack enable || true
+          if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; pnpm build;           elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; yarn build;           elif [ -f package-lock.json ]; then npm ci; npm run build;           else npm install; npm run build || true; fi
+
+      - name: Create EB source bundle (includes Dockerfile)
+        run: |
+          cd $APP_DIR
+          zip -r ../app.zip . -x ".git/*" ".github/*"
+          cd ..
+
+      - name: Upload artifact (app.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app_bundle
+          path: app.zip
+          if-no-files-found: error
+
+  infra:
+    name: Infra - Terraform Init/Validate/Plan
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan (no changes applied)
+        working-directory: ${{ env.INFRA_DIR }}
+        run: |
+          terraform plan             -var="region=${{ secrets.AWS_REGION }}"             -var="version_label=${{ env.VERSION_LABEL }}"             -var="source_bundle=../app.zip"             -var="app_name=eb-nextjs-demo"             -var="env_name=dev"             -var="platform_arn=${{ secrets.EB_PLATFORM_ARN }}"
+
+  cd:
+    name: CD - Apply & Deploy to EB
+    needs: [infra]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app_bundle
+          path: .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply (creates/updates EB app/env and deploys new version)
+        working-directory: ${{ env.INFRA_DIR }}
+        run: |
+          terraform apply -auto-approve             -var="region=${{ secrets.AWS_REGION }}"             -var="version_label=${{ env.VERSION_LABEL }}"             -var="source_bundle=../app.zip"             -var="app_name=eb-nextjs-demo"             -var="env_name=dev"             -var="platform_arn=${{ secrets.EB_PLATFORM_ARN }}"
+
+      - name: Show EB URL
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform output endpoint_url
