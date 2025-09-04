@@ -81,6 +81,10 @@ jobs:
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Terraform fmt (check)
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform fmt -check -recursive
+
       - name: Terraform Init
         working-directory: ${{ env.INFRA_DIR }}
         run: terraform init
