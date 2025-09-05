@@ -83,13 +83,12 @@ jobs:
             echo "❌ app.zip is too large for EB (limit 500 MB). Exclude more files."; exit 1
           fi
 
-
-            - name: Upload artifact (app.zip)
-              uses: actions/upload-artifact@v4
-              with:
-                name: app_bundle
-                path: app.zip
-                if-no-files-found: error
+      - name: Upload artifact (app.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app_bundle
+          path: app.zip
+          if-no-files-found: error
 
   infra:
     name: Infra - Terraform Init/Validate/Plan
