@@ -148,7 +148,11 @@ jobs:
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
-        
+
+      - name: Terraform Init
+        working-directory: ${{ env.INFRA_DIR }}
+        run: terraform init
+
       - name: Import existing IAM (idempotent)
         working-directory: ${{ env.INFRA_DIR }}
         shell: bash
@@ -166,10 +170,6 @@ jobs:
           if aws iam get-instance-profile --instance-profile-name "$PROFILE" >/dev/null 2>&1; then
             terraform import -no-color aws_iam_instance_profile.eb_ec2_instance_profile "$PROFILE" || true
           fi
-
-      - name: Terraform Init
-        working-directory: ${{ env.INFRA_DIR }}
-        run: terraform init
 
       - name: Terraform Apply (creates/updates EB app/env and deploys new version)
         working-directory: ${{ env.INFRA_DIR }}
