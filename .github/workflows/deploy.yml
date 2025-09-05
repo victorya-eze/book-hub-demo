@@ -148,6 +148,24 @@ jobs:
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
+        
+      - name: Import existing IAM (idempotent)
+        working-directory: ${{ env.INFRA_DIR }}
+        shell: bash
+        run: |
+          set -e
+          ROLE="eb-nextjs-demo-ec2-role"
+          PROFILE="eb-nextjs-demo-instance-profile"
+
+          # If role exists in AWS, import it into state (ignore if already imported)
+          if aws iam get-role --role-name "$ROLE" >/dev/null 2>&1; then
+            terraform import -no-color aws_iam_role.eb_ec2_role "$ROLE" || true
+          fi
+
+          # If instance profile exists in AWS, import it into state (ignore if already imported)
+          if aws iam get-instance-profile --instance-profile-name "$PROFILE" >/dev/null 2>&1; then
+            terraform import -no-color aws_iam_instance_profile.eb_ec2_instance_profile "$PROFILE" || true
+          fi
 
       - name: Terraform Init
         working-directory: ${{ env.INFRA_DIR }}
