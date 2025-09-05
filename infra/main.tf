@@ -80,13 +80,12 @@ resource "aws_elastic_beanstalk_environment" "env" {
   name        = "${var.app_name}-${var.env_name}"
   application = aws_elastic_beanstalk_application.app.name
 
-
-  # Prefer platform_arn when provided; otherwise use a Docker solution stack.
-  platform_arn        = length(trimspace(var.platform_arn)) > 0 ? var.platform_arn : null
-  solution_stack_name = length(trimspace(var.platform_arn)) == 0 ? "64bit Amazon Linux 2 v5.10.0 running Docker" : null
-
+  # Prefer platform_arn if explicitly provided, otherwise use the discovered solution stack name
+  platform_arn        = var.platform_arn != "" ? var.platform_arn : null
+  solution_stack_name = var.platform_arn == "" ? data.aws_elastic_beanstalk_solution_stack.docker_al2.name : null
 
   version_label = aws_elastic_beanstalk_application_version.ver.name
+
 
   # Basic capacity + health check
   setting {

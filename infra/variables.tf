@@ -30,3 +30,8 @@ variable "platform_arn" {
   type    = string
   default = "arn:aws:elasticbeanstalk:eu-west-2::platform/Docker running on 64bit Amazon Linux 2/5.10.0"
 }
+
+variable "platform_arn" {
+  type    = string
+  default = ""  # leave blank to use the discovered solution stack
+}
