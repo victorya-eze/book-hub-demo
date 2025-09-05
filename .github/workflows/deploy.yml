@@ -50,18 +50,46 @@ jobs:
           fi
 
       - name: Create EB source bundle (includes Dockerfile)
+        shell: bash
         run: |
-          cd $APP_DIR
-          zip -r ../app.zip . -x ".git/*" ".github/*"
+          cd "$APP_DIR"
+
+          # verify Dockerfile exists at bundle root
+          test -f Dockerfile || { echo "❌ Dockerfile not found in $APP_DIR"; exit 1; }
+
+          # create a lean zip; exclude heavy build output and caches
+          zip -r ../app.zip . \
+            -x ".git/*" \
+              ".github/*" \
+              "node_modules/*" \
+              ".next/*" \
+              "coverage/*" \
+              "dist/*" \
+              "build/*" \
+              "**/*.log" \
+              ".DS_Store" \
+              "*.tmp"
+
           cd ..
 
-      - name: Upload artifact (app.zip)
-        uses: actions/upload-artifact@v4
-        with:
-          name: app_bundle
-          path: app.zip
-          if-no-files-found: error
+          # sanity check: non-empty and under 490 MB
+          unzip -l app.zip | tail -n +1
+          SIZE_MB=$(du -m app.zip | cut -f1)
+          echo "📦 app.zip size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -eq 0 ]; then
+            echo "❌ app.zip is empty"; exit 1
+          fi
+          if [ "$SIZE_MB" -ge 490 ]; then
+            echo "❌ app.zip is too large for EB (limit 500 MB). Exclude more files."; exit 1
+          fi
 
+
+            - name: Upload artifact (app.zip)
+              uses: actions/upload-artifact@v4
+              with:
+                name: app_bundle
+                path: app.zip
+                if-no-files-found: error
 
   infra:
     name: Infra - Terraform Init/Validate/Plan
@@ -96,7 +124,7 @@ jobs:
       - name: Terraform Plan (no changes applied)
         working-directory: ${{ env.INFRA_DIR }}
         run: |
-          terraform plan             -var="region=${{ secrets.AWS_REGION }}"             -var="version_label=${{ env.VERSION_LABEL }}"             -var="source_bundle=../app.zip"             -var="app_name=eb-nextjs-demo"             -var="env_name=dev"             -var="platform_arn=${{ secrets.EB_PLATFORM_ARN }}"
+          terraform plan -var="region=${{ secrets.AWS_REGION }}" -var="version_label=${{ env.VERSION_LABEL }}" -var="source_bundle=../app.zip" -var="app_name=eb-nextjs-demo" -var="env_name=dev" -var="platform_arn=${{ secrets.EB_PLATFORM_ARN }}"
 
   cd:
     name: CD - Apply & Deploy to EB
